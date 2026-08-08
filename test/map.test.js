@@ -94,8 +94,12 @@ check('底图切换事件已绑定', Array.isArray(created.mapHandlers.baselayer
 check('地图未走离线降级', !$('map').textContent.includes('加载失败'));
 
 console.log('— 图钉分组 —');
-const uniquePlaces = new Set(M.map(m => m.city + '|' + m.country)).size;
-check('图钉数 = 地点数 ' + uniquePlaces, created.markers.length === uniquePlaces, created.markers.length);
+/* 默认隐藏特别版与已停产的 Global Icon，所以图钉只覆盖仍可收集的地点 */
+const VISIBLE = (m) => !m.special && m.series !== 'global-icon';
+const uniquePlaces = new Set(M.filter(VISIBLE).map(m => m.city + '|' + m.country)).size;
+const allPlaces = new Set(M.map(m => m.city + '|' + m.country)).size;
+check('图钉数 = 默认可见地点数 ' + uniquePlaces + '（全库 ' + allPlaces + '）',
+  created.markers.length === uniquePlaces, created.markers.length);
 const totalGrouped = created.markers.length;
 check('无重复坐标图钉', new Set(created.markers.map(m => m._latlng.join(','))).size === totalGrouped,
   totalGrouped - new Set(created.markers.map(m => m._latlng.join(','))).size + ' 重复');
@@ -122,7 +126,7 @@ check('popup 条目可点开详情', html.includes('data-action="open-mug"'));
 check('popup 含 SVG 缩略图', html.includes('<svg'));
 
 console.log('— 收集状态联动 —');
-const target = M.find(m => !m.special);   /* 特别版默认不显示，不会有图钉 */
+const target = M.find(VISIBLE);   /* 默认隐藏的款式不会有图钉 */
 const sameCity = M.filter(m => m.city === target.city && m.country === target.country);
 window.Collection.set(target.id, 'owned');
 created.markers.length = 0;            /* 只看本次重绘产生的图钉 */
@@ -166,7 +170,7 @@ const sampleKey = created.markers[created.markers.length - 1].options.sbKey;
 click($('btn-lang'));
 check('语言确实切换了', window.I18N.lang !== beforeLang, beforeLang + ' → ' + window.I18N.lang);
 const after = created.markers.filter(m => m.options.sbKey === sampleKey).pop();
-const mugForKey = M.find(m => m.city + '|' + m.country === sampleKey);
+const mugForKey = M.filter(VISIBLE).find(m => m.city + '|' + m.country === sampleKey);
 const expectTitle = window.I18N.lang === 'en' ? mugForKey.city : (mugForKey.cityZh || mugForKey.city);
 check('图钉 title 跟随语言', after.options.title === expectTitle,
   after.options.title + ' ≠ ' + expectTitle);

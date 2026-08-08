@@ -96,6 +96,8 @@ window.I18N = (function () {
       'chip.special': '🎄 特别版', 'chip.specialTitle': '圣诞、季节限定、原型等，默认不显示',
       'stats.byType': '按类型', 'stats.mugs': '马克杯', 'stats.ornaments': '挂饰',
       'stats.specialNote': '（不含特别版；打开筛选栏的「🎄 特别版」可纳入统计）',
+      'stats.scopeOn': '统计范围：{s}', 'stats.scopeOff': '未计入：{s}（已停产）',
+      'stats.scopeNoSpecial': '未计入特别版（圣诞/季节限定）',
       'share.weibo': '微博',
       'map.satellite': '卫星影像', 'map.street': '街道地图', 'map.terrain': '地形',
       'lang.btn': 'EN'
@@ -194,6 +196,8 @@ window.I18N = (function () {
       'chip.special': '🎄 Special editions', 'chip.specialTitle': 'Christmas, seasonal and prototype releases — hidden by default',
       'stats.byType': 'By type', 'stats.mugs': 'Mugs', 'stats.ornaments': 'Ornaments',
       'stats.specialNote': '(excludes special editions — enable the 🎄 chip in the filter bar to include them)',
+      'stats.scopeOn': 'Counting: {s}', 'stats.scopeOff': 'Excluded: {s} (discontinued)',
+      'stats.scopeNoSpecial': 'Excluding special editions (Christmas / seasonal)',
       'share.weibo': 'Weibo',
       'map.satellite': 'Satellite', 'map.street': 'Street map', 'map.terrain': 'Terrain',
       'lang.btn': 'ZH'

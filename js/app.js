@@ -7,6 +7,9 @@
   var t = I18N.t, tf = I18N.tf;
 
   var SERIES_ALL = ['global-icon', 'you-are-here', 'been-there', 'discovery'];
+  /* Global Icon 是 2008–2016 的停产系列，现在基本收不到，默认不显示——
+   * 和特别版同理，算进完成度只会让分母永远差一截。想看时点一下标签即可。 */
+  var SERIES_DEFAULT = ['you-are-here', 'been-there', 'discovery'];
   var TYPE_ALL = ['mug', 'ornament'];
   var SERIES = {
     'global-icon': { name: 'Global Icon', badge: 'b-gi' },
@@ -21,7 +24,7 @@
     shareView: null,   /* {name, owned:Set, wish:Set} 查看他人收藏时 */
     filters: {
       q: '',
-      series: new Set(SERIES_ALL),
+      series: new Set(SERIES_DEFAULT),
       types: new Set(TYPE_ALL),
       status: 'all',
       region: 'all',
@@ -145,13 +148,22 @@
   }
 
   /* 芯片交互：全选状态下点某个＝只看它；取消最后一个＝恢复全选 */
-  function chipToggle(set, all, value) {
-    if (set.size === all.length) {
-      set.clear();
-      set.add(value);
-    } else if (set.has(value)) {
+  /* 类型只有两个（马克杯/挂饰），用「点一下只看它、再点恢复两者」最顺手——
+   * 普通的开关语义在两项时会让人点了「挂饰」反而只剩马克杯，很反直觉。 */
+  function chipIsolate(set, all, value) {
+    if (set.size === all.length) { set.clear(); set.add(value); }
+    else if (set.has(value) && set.size === 1) { all.forEach(function (v) { set.add(v); }); }
+    else if (set.has(value)) { set.delete(value); }
+    else { set.add(value); }
+  }
+
+  /* 系列有四个且 Global Icon 默认关闭，用直白的开关语义：
+   * 点一下开、再点一下关，标签的高亮状态就是它的真实状态。
+   * 全部关掉时回到默认集，避免出现空结果。 */
+  function chipToggle(set, value, defaults) {
+    if (set.has(value)) {
       set.delete(value);
-      if (!set.size) all.forEach(function (v) { set.add(v); });
+      if (!set.size) defaults.forEach(function (v) { set.add(v); });
     } else {
       set.add(value);
     }
@@ -282,9 +294,12 @@
     var owned = 0, wish = 0;
     var ownedCountries = {}, allCountries = {};
     var bySeries = {}, byRegion = {}, byType = {}, bySeriesType = {};
-    /* 统计范围跟随「特别版」开关：默认不把收不到的限定款算进完成度，
-     * 否则分母永远差一截，看着像永远集不满。 */
-    var scope = DATA.filter(function (m) { return !m.special || state.filters.special; });
+    /* 统计范围跟随「特别版」开关与当前选中的系列：默认不把已停产、收不到的
+     * 款式算进完成度，否则分母永远差一截，看着像永远集不满。 */
+    var scope = DATA.filter(function (m) {
+      if (m.special && !state.filters.special) return false;
+      return state.filters.series.has(m.series);
+    });
     scope.forEach(function (m) {
       var s = statusOf(m.id);
       var cn = countryDisp(m);
@@ -317,7 +332,7 @@
       '<div class="stat-card"><div class="num">' + pct + '%</div><div class="lbl">' + esc(tf('stats.completion', { n: scope.length })) + '</div></div>' +
       '<div class="stat-card"><div class="num">' + Object.keys(ownedCountries).length + '</div><div class="lbl">' + esc(t('stats.countries')) + '</div></div>' +
       '</div>' +
-      (state.filters.special ? '' : '<p class="stats-note">' + esc(t('stats.specialNote')) + '</p>');
+      '<p class="stats-note">' + esc(scopeNote()) + '</p>';
 
     html += '<h3>' + esc(t('stats.byType')) + '</h3>';
     [['mug', 'stats.mugs'], ['ornament', 'stats.ornaments']].forEach(function (pair) {
@@ -330,8 +345,8 @@
 
     html += '<h3>' + esc(t('stats.seriesProgress')) + '</h3>';
     SERIES_ALL.forEach(function (k) {
-      var v = bySeries[k] || { total: 0, owned: 0 };
-      if (!v.total) return;
+      var v = bySeries[k];
+      if (!v || !v.total) return;
       var p = v.total ? Math.round(v.owned * 100 / v.total) : 0;
       var mv = bySeriesType[k + '|mug'] || { total: 0, owned: 0 };
       var ov = bySeriesType[k + '|ornament'] || { total: 0, owned: 0 };
@@ -363,6 +378,18 @@
     });
     html += '</table>';
     $('stats-wrap').innerHTML = html;
+  }
+
+  /* 统计页顶部说明当前统计了哪些范围——分母变了必须让人看得见 */
+  function scopeNote() {
+    var on = SERIES_ALL.filter(function (k) { return state.filters.series.has(k); })
+      .map(function (k) { return SERIES[k].name; });
+    var off = SERIES_ALL.filter(function (k) { return !state.filters.series.has(k); })
+      .map(function (k) { return SERIES[k].name; });
+    var parts = [tf('stats.scopeOn', { s: on.join(' / ') || '—' })];
+    if (off.length) parts.push(tf('stats.scopeOff', { s: off.join(' / ') }));
+    if (!state.filters.special) parts.push(t('stats.scopeNoSpecial'));
+    return parts.join(' · ');   /* 别用全角空格，那是 CJK 字符，英文界面不能出现 */
   }
 
   /* ---------- 详情弹窗 ---------- */
@@ -721,12 +748,12 @@
       }
       case 'close-modal': closeModals(); break;
       case 'chip-series':
-        chipToggle(state.filters.series, SERIES_ALL, el.dataset.value);
+        chipToggle(state.filters.series, el.dataset.value, SERIES_DEFAULT);
         syncChips();
         applyFilters();
         break;
       case 'chip-type':
-        chipToggle(state.filters.types, TYPE_ALL, el.dataset.value);
+        chipIsolate(state.filters.types, TYPE_ALL, el.dataset.value);
         syncChips();
         applyFilters();
         break;
@@ -806,7 +833,7 @@
   function resetFilters() {
     var f = state.filters;
     f.q = ''; $('f-search').value = '';
-    f.series = new Set(SERIES_ALL);
+    f.series = new Set(SERIES_DEFAULT);
     f.types = new Set(TYPE_ALL);
     f.special = false;
     f.status = 'all'; $('f-status').value = 'all';

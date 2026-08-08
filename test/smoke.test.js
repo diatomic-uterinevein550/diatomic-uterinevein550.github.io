@@ -56,15 +56,16 @@ const click = (el) => el.dispatchEvent(new window.MouseEvent('click', { bubbles:
 const input = (el, v) => { el.value = v; el.dispatchEvent(new window.Event('input', { bubbles: true })); };
 const search = async (v) => { input($('f-search'), v); await new Promise(r => setTimeout(r, 260)); };
 const change = (el, v) => { el.value = v; el.dispatchEvent(new window.Event('change', { bubbles: true })); };
-const cnt = (fn) => window.MUG_DATA.filter(m => !m.special).filter(fn).length;
+const cnt = (fn) => window.MUG_DATA.filter(m => !m.special && m.series !== 'global-icon').filter(fn).length;
 
 (async () => {
   const M = window.MUG_DATA;
   const N_ALL = M.length;
-  const N = M.filter(m => !m.special).length;          /* 特别版默认不显示 */
+  const VISIBLE = (m) => !m.special && m.series !== 'global-icon';  /* 默认可见范围 */
+  const N = M.filter(VISIBLE).length;
   const N_SPECIAL = M.filter(m => m.special).length;
+  const N_GI = M.filter(m => m.series === 'global-icon').length;
   const N_ORN = cnt(m => m.type === 'ornament');
-  const N_GI = cnt(m => m.series === 'global-icon');
   const N_YAH = cnt(m => m.series === 'you-are-here');
   const N_ASIA = cnt(m => m.region === 'asia');
   const N_CN = cnt(m => m.country === 'China');
@@ -94,14 +95,24 @@ const cnt = (fn) => window.MUG_DATA.filter(m => !m.special).filter(fn).length;
   check('点「挂饰」只看挂饰 = ' + N_ORN, $('result-count').textContent.includes(String(N_ORN)), $('result-count').textContent);
   click(q('[data-value="ornament"]'));
   check('再点一次恢复全部', $('result-count').textContent.includes(String(N)));
+  check('Global Icon 默认关闭', !q('[data-value="global-icon"]').classList.contains('active'));
+  const N_GI_VIS = M.filter(m => m.series === 'global-icon' && !m.special).length;
   click(q('[data-value="global-icon"]'));
-  check('点 Global Icon 只看 GI = ' + N_GI, $('result-count').textContent.includes(String(N_GI)), $('result-count').textContent);
-  click(q('[data-value="you-are-here"]'));
-  check('再点 YAH 追加 = ' + (N_GI + N_YAH), $('result-count').textContent.includes(String(N_GI + N_YAH)), $('result-count').textContent);
+  check('点开 Global Icon 后纳入 ' + (N + N_GI_VIS),
+    $('result-count').textContent.includes(String(N + N_GI_VIS)), $('result-count').textContent);
   click(q('[data-value="global-icon"]'));
-  check('取消 GI 剩 YAH = ' + N_YAH, $('result-count').textContent.includes(String(N_YAH)));
+  check('再点关闭，恢复默认范围', $('result-count').textContent.includes(String(N)));
+  /* 系列是直白开关：点一下关、再点一下开 */
+  const N_YAH_VIS = M.filter(m => m.series === 'you-are-here' && !m.special).length;
   click(q('[data-value="you-are-here"]'));
-  check('取消最后一个自动恢复全选', $('result-count').textContent.includes(String(N)));
+  check('关掉 YAH 后剩 ' + (N - N_YAH_VIS),
+    $('result-count').textContent.includes(String(N - N_YAH_VIS)), $('result-count').textContent);
+  click(q('[data-value="been-there"]'));
+  click(q('[data-value="discovery"]'));
+  check('全部关掉后回到默认集（GI 仍关闭）',
+    $('result-count').textContent.includes(String(N)) &&
+    !q('[data-value="global-icon"]').classList.contains('active'),
+    $('result-count').textContent);
 
   change($('f-region'), 'asia');
   check('亚洲过滤 = ' + N_ASIA, $('result-count').textContent.includes(String(N_ASIA)), $('result-count').textContent);
@@ -519,8 +530,30 @@ const cnt = (fn) => window.MUG_DATA.filter(m => !m.special).filter(fn).length;
   check('统计出现「按类型」分栏', statsTxt.includes('按类型'));
   check('分栏含马克杯与挂饰', statsTxt.includes('马克杯') && statsTxt.includes('挂饰'));
   check('系列进度下有杯/挂饰细分', $('stats-wrap').querySelectorAll('.series-sub-row').length >= 3);
-  check('统计说明了未含特别版', statsTxt.includes('不含特别版'));
+  check('统计说明了未计入的范围', statsTxt.includes('未计入特别版') && statsTxt.includes('统计范围'), statsTxt.slice(0,80));
   check('统计分母为默认可见数 ' + N, statsTxt.includes('共 ' + N + ' 款'), statsTxt.slice(0, 60));
+  check('统计注明 Global Icon 已停产未计入', statsTxt.includes('Global Icon') && statsTxt.includes('已停产'));
+
+  console.log('— 数据可辨识性 —');
+  check('不存在无法区分的重复条目', (() => {
+    const seen = new Map();
+    for (const x of M) {
+      const k = [x.series, x.type, x.city, x.country, x.edition || ''].join('|');
+      if (seen.has(k)) { console.log('      重复: ' + seen.get(k) + ' 与 ' + x.id); return false; }
+      seen.set(k, x.id);
+    }
+    return true;
+  })());
+  check('同名不同拼写的款式各有版本标记（如 Türkiye / Turkey）', (() => {
+    const tr = M.filter(x => x.country === 'Turkey' && x.type === 'ornament' && !x.special);
+    const eds = tr.map(x => x.edition || '');
+    return new Set(eds).size === eds.length;
+  })());
+  check('年份落在各系列合理区间', M.every(x => {
+    const r = { 'global-icon': [2008, 2017], 'you-are-here': [2013, 2026],
+                'been-there': [2018, 2026], 'discovery': [2023, 2026] }[x.series];
+    return x.year >= r[0] && x.year <= r[1];
+  }));
 
   console.log('— 云端模式切换 —');
   check('仓库里已配置 Supabase', !!(REAL_CLOUD.url && REAL_CLOUD.anonKey));
