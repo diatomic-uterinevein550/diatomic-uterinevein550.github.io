@@ -24,7 +24,8 @@ const check = (name, cond, extra) => {
 };
 
 /* ---- Leaflet 桩 ---- */
-const created = { markers: [], clusterOpts: null, tileUrl: null, view: null, popupsOpened: [],
+const created = { markers: [], clusterOpts: null, tileUrl: null, tileUrls: [], view: null, popupsOpened: [],
+  baseLayerNames: null, mapHandlers: {},
   singleAdds: 0, bulkAdds: 0, clears: 0, refreshes: 0, iconSets: 0 };
 function Marker(latlng, opts) {
   this._latlng = latlng; this.options = opts || {}; this._popup = null; this._popupOpen = false;
@@ -53,8 +54,20 @@ window.L = {
     getZoom: () => 3,
     invalidateSize() {},
     addLayer() { return this; },
+    removeLayer() { return this; },
+    on(evt, fn) { (created.mapHandlers[evt] = created.mapHandlers[evt] || []).push(fn); return this; },
   }),
-  tileLayer: (url) => { created.tileUrl = url; return { addTo() { return this; } }; },
+  tileLayer: (url, opts) => {
+    created.tileUrls.push(url);
+    if (!created.tileUrl) created.tileUrl = url;      /* 第一个即默认底图 */
+    return { addTo() { return this; }, __url: url, options: opts || {} };
+  },
+  control: {
+    layers: (base) => {
+      created.baseLayerNames = Object.keys(base || {});
+      return { addTo() { return this; } };
+    },
+  },
   layerGroup: () => new ClusterGroup({}),
   markerClusterGroup: (o) => new ClusterGroup(o),
   marker: (ll, o) => new Marker(ll, o),
@@ -73,6 +86,11 @@ const click = (el) => el.dispatchEvent(new window.MouseEvent('click', { bubbles:
 console.log('— 地图初始化 —');
 check('使用聚合图层', created.clusterOpts !== null && created.clusterOpts.maxClusterRadius === 45);
 check('底图为 https CDN', /^https:\/\//.test(created.tileUrl || ''), created.tileUrl);
+check('默认底图是卫星影像', /World_Imagery/.test(created.tileUrl || ''), created.tileUrl);
+check('叠加了地名注记层', created.tileUrls.some(u => /World_Boundaries_and_Places/.test(u)));
+check('提供三种底图可切换（' + (created.baseLayerNames || []).length + '）',
+  (created.baseLayerNames || []).length === 3, (created.baseLayerNames || []).join(', '));
+check('底图切换事件已绑定', Array.isArray(created.mapHandlers.baselayerchange));
 check('地图未走离线降级', !$('map').textContent.includes('加载失败'));
 
 console.log('— 图钉分组 —');
@@ -104,12 +122,14 @@ check('popup 条目可点开详情', html.includes('data-action="open-mug"'));
 check('popup 含 SVG 缩略图', html.includes('<svg'));
 
 console.log('— 收集状态联动 —');
-const target = M[0];
+const target = M.find(m => !m.special);   /* 特别版默认不显示，不会有图钉 */
 const sameCity = M.filter(m => m.city === target.city && m.country === target.country);
 window.Collection.set(target.id, 'owned');
 created.markers.length = 0;            /* 只看本次重绘产生的图钉 */
 click(window.document.querySelector('[data-view="map"]'));
-const mk = created.markers.find(m => m.options.title === (target.cityZh || target.city));
+/* 默认语言已是英文，图钉标题用英文名；别再假设中文 */
+const titleOf = (m) => (window.I18N.lang === 'en' ? m.city : (m.cityZh || m.city));
+const mk = created.markers.find(m => m.options.title === titleOf(target));
 const expected = sameCity.length === 1 ? 'owned' : 'partial';
 check('标记后图钉状态更新为 ' + expected, mk && mk.options.sbState === expected, mk && mk.options.sbState);
 check('重绘产生完整图钉集', created.markers.length === uniquePlaces, created.markers.length);
@@ -140,9 +160,16 @@ check('setView 到该坐标', created.view && created.view.v[0] === target.lat &
 check('聚合模式下展开簇再开 popup', created.popupsOpened.length === 1);
 
 console.log('— 语言切换后重绘 —');
+/* 站点默认英文；点一下切到中文，图钉标题应变成中文名 */
+const beforeLang = window.I18N.lang;
+const sampleKey = created.markers[created.markers.length - 1].options.sbKey;
 click($('btn-lang'));
-const enMarker = created.markers[created.markers.length - 1];
-check('图钉 title 跟随语言', /^[\x00-\x7F\s.'-]+$/.test(enMarker.options.title), enMarker.options.title);
+check('语言确实切换了', window.I18N.lang !== beforeLang, beforeLang + ' → ' + window.I18N.lang);
+const after = created.markers.filter(m => m.options.sbKey === sampleKey).pop();
+const mugForKey = M.find(m => m.city + '|' + m.country === sampleKey);
+const expectTitle = window.I18N.lang === 'en' ? mugForKey.city : (mugForKey.cityZh || mugForKey.city);
+check('图钉 title 跟随语言', after.options.title === expectTitle,
+  after.options.title + ' ≠ ' + expectTitle);
 
 console.log(failures === 0 ? '\n✅ 地图测试全部通过' : '\n❌ ' + failures + ' 项失败');
 process.exit(failures === 0 ? 0 : 1);

@@ -8,6 +8,8 @@ window.MapView = (function () {
   var ready = false;
   var markersByKey = {};
   var listByKey = {};
+  var baseLayers = null;
+  var layerControl = null;
 
   function init() {
     var el = document.getElementById('map');
@@ -21,11 +23,34 @@ window.MapView = (function () {
       maxBounds: [[-78, -220], [86, 220]],
       maxBoundsViscosity: 0.6
     }).setView([28, 12], 2);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    /* 卫星影像作为默认底图——比卡通矢量图更接近"看真实地球"。
+     * Esri World Imagery 免费、无需 key；想用 Google 的影像见 README 的说明。 */
+    var sat = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics', maxZoom: 19 });
+    var labels = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+      { attribution: '', maxZoom: 19, pane: 'shadowPane' });
+    var street = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-      subdomains: 'abcd',
-      maxZoom: 18
-    }).addTo(map);
+      subdomains: 'abcd', maxZoom: 19 });
+    var terrain = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Physical_Map/MapServer/tile/{z}/{y}/{x}',
+      { attribution: 'Imagery &copy; Esri', maxZoom: 8 });
+
+    sat.addTo(map);
+    labels.addTo(map);
+
+    baseLayers = {};
+    baseLayers[I18N.t('map.satellite')] = sat;
+    baseLayers[I18N.t('map.street')] = street;
+    baseLayers[I18N.t('map.terrain')] = terrain;
+    layerControl = L.control.layers(baseLayers, null, { position: 'topright' }).addTo(map);
+    /* 只有卫星图需要叠加地名注记 */
+    map.on('baselayerchange', function (e) {
+      if (e.layer === sat) labels.addTo(map);
+      else map.removeLayer(labels);
+    });
 
     /* 八百多个地点，用聚合层；插件没加载上就退回普通图层组 */
     if (L.markerClusterGroup) {

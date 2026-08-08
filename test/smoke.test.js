@@ -42,17 +42,27 @@ for (const f of ['data.js', 'photos-index.js', 'placeArt.js', 'mugArt.js', 'clou
 const REAL_CLOUD = { ...window.CLOUD_CONFIG };
 window.CLOUD_CONFIG = { url: '', anonKey: '' };
 
+/* 站点默认语言已改为英文；本文件的断言基于中文界面。
+ * setLang 只改状态，要点一下切换按钮才会重绘界面——先切到英文再切回中文，
+ * 保证走的是和用户一样的路径。 */
+if (window.I18N.lang !== 'zh') {
+  window.document.getElementById('btn-lang').dispatchEvent(
+    new window.MouseEvent('click', { bubbles: true }));
+}
+
 const $ = (id) => window.document.getElementById(id);
 const q = (sel) => window.document.querySelector(sel);
 const click = (el) => el.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
 const input = (el, v) => { el.value = v; el.dispatchEvent(new window.Event('input', { bubbles: true })); };
 const search = async (v) => { input($('f-search'), v); await new Promise(r => setTimeout(r, 260)); };
 const change = (el, v) => { el.value = v; el.dispatchEvent(new window.Event('change', { bubbles: true })); };
-const cnt = (fn) => window.MUG_DATA.filter(fn).length;
+const cnt = (fn) => window.MUG_DATA.filter(m => !m.special).filter(fn).length;
 
 (async () => {
   const M = window.MUG_DATA;
-  const N = M.length;
+  const N_ALL = M.length;
+  const N = M.filter(m => !m.special).length;          /* 特别版默认不显示 */
+  const N_SPECIAL = M.filter(m => m.special).length;
   const N_ORN = cnt(m => m.type === 'ornament');
   const N_GI = cnt(m => m.series === 'global-icon');
   const N_YAH = cnt(m => m.series === 'you-are-here');
@@ -60,7 +70,7 @@ const cnt = (fn) => window.MUG_DATA.filter(fn).length;
   const N_CN = cnt(m => m.country === 'China');
 
   console.log('— 启动 —');
-  check('数据集非空 (' + N + ' 款)', N >= 2000);
+  check('数据集非空 (共 ' + N_ALL + ' 款，默认显示 ' + N + ')', N_ALL >= 2000 && N < N_ALL);
   check('地图离线降级提示', $('map').textContent.length > 5);
   check('结果计数', $('result-count').textContent.includes(N + ' ') || $('result-count').textContent.includes('/ ' + N), $('result-count').textContent);
   check('国家下拉已填充', $('f-country').options.length > 40, $('f-country').options.length + ' options');
@@ -488,6 +498,30 @@ const cnt = (fn) => window.MUG_DATA.filter(fn).length;
   check('每个地点图形互不相同（' + byPlace.size + ' 个地点）',
     shapes.size === byPlace.size, shapes.size + ' / ' + byPlace.size);
 
+  console.log('— 特别版开关 —');
+  click(q('[data-view="gallery"]'));
+  check('默认隐藏特别版（' + N_SPECIAL + ' 款圣诞/季节限定）',
+    $('result-count').textContent.includes(String(N)), $('result-count').textContent);
+  check('特别版开关默认未激活', !q('#f-special .chip').classList.contains('active'));
+  click(q('[data-action="chip-special"]'));
+  check('打开后纳入全部 ' + N_ALL + ' 款', $('result-count').textContent.includes(String(N_ALL)));
+  check('开关变为激活', q('#f-special .chip').classList.contains('active'));
+  check('特别版条目确实带 special 标记',
+    M.filter(m => m.special).every(m => /christmas|winter|spring|summer|autumn|fall|limited|prototype|olympic|green trees|years of/i.test(m.edition || '')));
+  click(q('[data-action="chip-special"]'));
+  check('再点关闭，恢复隐藏', $('result-count').textContent.includes(String(N)));
+  click(q('[data-action="reset-filters"]'));
+  check('重置后特别版仍为关闭（这是默认态）', !q('#f-special .chip').classList.contains('active'));
+
+  console.log('— 统计分型 —');
+  click(q('[data-view="stats"]'));
+  const statsTxt = $('stats-wrap').textContent;
+  check('统计出现「按类型」分栏', statsTxt.includes('按类型'));
+  check('分栏含马克杯与挂饰', statsTxt.includes('马克杯') && statsTxt.includes('挂饰'));
+  check('系列进度下有杯/挂饰细分', $('stats-wrap').querySelectorAll('.series-sub-row').length >= 3);
+  check('统计说明了未含特别版', statsTxt.includes('不含特别版'));
+  check('统计分母为默认可见数 ' + N, statsTxt.includes('共 ' + N + ' 款'), statsTxt.slice(0, 60));
+
   console.log('— 云端模式切换 —');
   check('仓库里已配置 Supabase', !!(REAL_CLOUD.url && REAL_CLOUD.anonKey));
   check('配置的是可公开的 key，不是管理员密钥',
@@ -522,6 +556,61 @@ const cnt = (fn) => window.MUG_DATA.filter(fn).length;
     q('#form-login .f-username').hidden === false && q('#form-login .f-email').hidden === true);
   check('切回本地模式：邮箱字段被禁用', q('#form-login [name=email]').disabled === true);
   click(q('#modal-auth [data-action="close-modal"]'));
+
+  console.log('— 英文模式不得出现任何中文 —');
+  const CJK = /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/;
+  const sweep = (label, text) => {
+    const hit = (text || '').match(new RegExp(CJK.source, 'g'));
+    check('英文模式无中文 · ' + label, !hit, hit ? hit.slice(0, 6).join('') : '');
+  };
+  if (window.I18N.lang !== 'en') click($('btn-lang'));
+  check('已切到英文', window.I18N.lang === 'en');
+  check('语言按钮本身不含中文', !CJK.test($('btn-lang').textContent), $('btn-lang').textContent);
+  /* 用户自己填的名字不算界面文案——中文名用户当然该看到自己的名字 */
+  sweep('顶栏（不含用户名）',
+    q('.topbar').textContent.replace($('user-chip').textContent, ''));
+  check('游客标签为英文', (() => {
+    const before = window.Auth.current();
+    click($('btn-logout'));
+    const ok = !CJK.test($('user-chip').textContent) && /Guest/i.test($('user-chip').textContent);
+    return ok;
+  })(), $('user-chip').textContent);
+  sweep('筛选栏', q('.filterbar').textContent);
+  sweep('结果计数', $('result-count').textContent);
+  sweep('折叠按钮', $('filter-toggle').textContent);
+  sweep('地图图例', q('.map-legend').textContent);
+  sweep('页脚', q('.footer').textContent);
+  click(q('[data-view="gallery"]'));
+  sweep('图鉴卡片', q('.card').textContent);
+  click(q('.card[data-action="open-mug"]'));
+  sweep('详情弹窗', $('mug-detail').textContent);
+  click(q('#modal-mug [data-action="close-modal"]'));
+  click(q('[data-view="stats"]'));
+  sweep('统计页', $('stats-wrap').textContent);
+  click(q('[data-action="auth-open"]'));
+  sweep('登录注册框', $('modal-auth').textContent);
+  click(q('[data-tab="register"]'));
+  sweep('注册页', $('modal-auth').textContent);
+  click(q('#modal-auth [data-action="close-modal"]'));
+  click(q('[data-action="io-open"]'));
+  sweep('导入导出框', $('modal-io').textContent);
+  click(q('#modal-io [data-action="close-modal"]'));
+  click(q('[data-action="share-open"]'));
+  sweep('分享框（含平台按钮）', $('modal-share').textContent);
+  click(q('#modal-share [data-action="close-modal"]'));
+  /* 数据里的中文名不能漏进英文界面 */
+  const purityCard = q('.card');
+  check('英文模式卡片不显示中文城市名', !CJK.test(purityCard.textContent), purityCard.textContent.slice(0, 40));
+  /* 词典本身：英文条目里不该混中文 */
+  check('英文词典无中文值', (() => {
+    const src = fs.readFileSync(path.join(ROOT, 'js', 'i18n.js'), 'utf8');
+    const en = src.slice(src.indexOf('en: {'));
+    const body = en.slice(0, en.indexOf('\n    }'));
+    const bad = [...body.matchAll(/'([\w.-]+)':\s*'([^']*)'/g)]
+      .filter(m => CJK.test(m[2])).map(m => m[1]);
+    return bad.length === 0 ? true : (console.log('      混入中文的键: ' + bad.join(', ')), false);
+  })());
+  if (window.I18N.lang !== 'zh') click($('btn-lang'));
 
   console.log(failures === 0 ? '\n✅ 全部通过' : '\n❌ ' + failures + ' 项失败');
   process.exit(failures === 0 ? 0 : 1);

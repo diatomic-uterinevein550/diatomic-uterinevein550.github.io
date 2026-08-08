@@ -93,6 +93,11 @@ window.I18N = (function () {
       'auth.email': '邮箱', 'auth.emailPh': 'you@example.com',
       'auth.cloudHint': '☁️ 账号存于 Supabase，收藏会在你的设备间自动同步。',
       'auth.localHint': '⚠️ 账号数据保存在本浏览器（localStorage），不会上传服务器。请定期使用「导出」备份收藏记录。',
+      'chip.special': '🎄 特别版', 'chip.specialTitle': '圣诞、季节限定、原型等，默认不显示',
+      'stats.byType': '按类型', 'stats.mugs': '马克杯', 'stats.ornaments': '挂饰',
+      'stats.specialNote': '（不含特别版；打开筛选栏的「🎄 特别版」可纳入统计）',
+      'share.weibo': '微博',
+      'map.satellite': '卫星影像', 'map.street': '街道地图', 'map.terrain': '地形',
       'lang.btn': 'EN'
     },
     en: {
@@ -186,12 +191,17 @@ window.I18N = (function () {
       'auth.email': 'Email', 'auth.emailPh': 'you@example.com',
       'auth.cloudHint': '☁️ Accounts live in Supabase; your collection syncs across your devices.',
       'auth.localHint': '⚠️ Accounts live in this browser (localStorage) and are never uploaded. Export regularly to back up your collection.',
-      'lang.btn': '中文'
+      'chip.special': '🎄 Special editions', 'chip.specialTitle': 'Christmas, seasonal and prototype releases — hidden by default',
+      'stats.byType': 'By type', 'stats.mugs': 'Mugs', 'stats.ornaments': 'Ornaments',
+      'stats.specialNote': '(excludes special editions — enable the 🎄 chip in the filter bar to include them)',
+      'share.weibo': 'Weibo',
+      'map.satellite': 'Satellite', 'map.street': 'Street map', 'map.terrain': 'Terrain',
+      'lang.btn': 'ZH'
     }
   };
 
   var lang = SafeStore.get('sbmug_lang');
-  if (lang !== 'zh' && lang !== 'en') lang = 'zh';
+  if (lang !== 'zh' && lang !== 'en') lang = 'en';   /* 默认英文 */
 
   function t(key) {
     return (DICT[lang] && DICT[lang][key]) || DICT.zh[key] || key;
@@ -212,6 +222,9 @@ window.I18N = (function () {
     });
     document.querySelectorAll('[data-i18n-ph]').forEach(function (el) {
       el.placeholder = t(el.getAttribute('data-i18n-ph'));
+    });
+    document.querySelectorAll('[data-i18n-title]').forEach(function (el) {
+      el.title = t(el.getAttribute('data-i18n-title'));
     });
     var lb = document.getElementById('btn-lang');
     if (lb) lb.textContent = t('lang.btn');

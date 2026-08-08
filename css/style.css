@@ -143,6 +143,8 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .chip.c-yah.active { background: var(--c-yah); }
 .chip.c-bt.active { background: var(--c-bt); }
 .chip.c-dc.active { background: var(--c-dc); }
+.chip.c-sp { border-style: dashed; }
+.chip.c-sp.active { background: #b8434f; border-style: solid; }
 
 .select {
   border: 1.5px solid var(--line);
@@ -181,8 +183,8 @@ main { flex: 1; min-height: 0; position: relative; }
 .ref-links .pbtn.primary:hover { filter: brightness(1.1); background: var(--green); }
 .map-legend {
   position: absolute;
-  right: 12px;          /* 左上/左下留给 Leaflet 的缩放控件与归属信息 */
-  bottom: 24px;
+  left: 12px;           /* 右侧留给图层切换控件与归属信息 */
+  bottom: 40px;         /* 抬高，避开底部的 Leaflet 归属条 */
   pointer-events: none; /* 不遮挡下方图钉/弹窗的点击 */
   background: rgba(255,253,248,.94);
   border: 1px solid var(--line);
@@ -215,6 +217,11 @@ main { flex: 1; min-height: 0; position: relative; }
 .pin-owned { background: #00754a; }
 .pin-wish { background: #cba258; }
 .pin-partial { background: linear-gradient(135deg, #00754a 50%, #8a8f98 50%); }
+
+/* 卫星底图上图钉要更亮的描边才看得清 */
+.leaflet-control-layers { border-radius: 10px !important; box-shadow: 0 2px 8px rgba(0,0,0,.25) !important; }
+.leaflet-control-layers-list { font: 13px/1.6 inherit; }
+#map .pin { border-width: 2.5px; box-shadow: 0 2px 8px rgba(0,0,0,.55); }
 
 /* 聚合图标 */
 .cluster {
@@ -373,6 +380,11 @@ main { flex: 1; min-height: 0; position: relative; }
 .series-row .sname { width: 170px; font-size: 13.5px; font-weight: 600; flex-shrink: 0; }
 .pbar { flex: 1; height: 14px; background: #e9e4d8; border-radius: 999px; overflow: hidden; }
 .pbar i { display: block; height: 100%; background: var(--green); border-radius: 999px; transition: width .4s; }
+.series-sub-row {
+  display: flex; gap: 14px; margin: -6px 0 12px 182px;
+  font-size: 12px; color: var(--muted);
+}
+.stats-note { font-size: 12.5px; color: var(--muted); margin: -18px 0 22px; line-height: 1.6; }
 .series-row .pnum { width: 90px; text-align: right; font-size: 12.5px; color: var(--muted); flex-shrink: 0; }
 
 .region-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
@@ -565,7 +577,7 @@ main { flex: 1; min-height: 0; position: relative; }
   .select { max-width: none; flex: 1 1 44%; }
   .result-count { margin-left: 0; width: 100%; }
 
-  .map-legend { bottom: 30px; right: 8px; padding: 7px 10px; font-size: 11.5px; gap: 3px; }
+  .map-legend { bottom: 42px; left: 8px; padding: 7px 10px; font-size: 11.5px; gap: 3px; }
   .mug-detail { flex-direction: column; align-items: center; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 11px; padding: 13px; }
   .toast { white-space: normal; text-align: center; }

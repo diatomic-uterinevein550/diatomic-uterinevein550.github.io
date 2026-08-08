@@ -26,6 +26,7 @@
       status: 'all',
       region: 'all',
       country: 'all',
+      special: false,       /* 圣诞等限定款基本收不到，默认不显示 */
       sort: 'country'
     }
   };
@@ -77,9 +78,11 @@
 
   /* 当前语言下的主/副显示名 */
   function cityMain(m) { return I18N.lang === 'en' ? m.city : (m.cityZh || m.city); }
+  /* 英文模式下副标题绝不能出现中文——中文名对英文用户毫无意义，
+   * 所以英文模式直接不显示副标题。 */
   function citySub(m) {
-    var sub = I18N.lang === 'en' ? m.cityZh : m.city;
-    return (sub && sub !== cityMain(m)) ? sub : '';
+    if (I18N.lang === 'en') return '';
+    return (m.city && m.city !== cityMain(m)) ? m.city : '';
   }
   function countryDisp(m) { return I18N.lang === 'en' ? m.country : (m.countryZh || m.country); }
   function landmarkDisp(m) {
@@ -107,6 +110,7 @@
     state.filtered = DATA.filter(function (m) {
       if (!f.series.has(m.series)) return false;
       if (!f.types.has(m.type)) return false;
+      if (m.special && !f.special) return false;
       if (f.region !== 'all' && m.region !== f.region) return false;
       if (f.country !== 'all' && m.country !== f.country) return false;
       if (f.status !== 'all') {
@@ -160,6 +164,8 @@
     document.querySelectorAll('#f-type .chip').forEach(function (c) {
       c.classList.toggle('active', state.filters.types.has(c.dataset.value));
     });
+    var sp = document.querySelector('#f-special .chip');
+    if (sp) sp.classList.toggle('active', state.filters.special);
   }
 
   function rebuildCountryOptions() {
@@ -275,40 +281,67 @@
   function renderStats() {
     var owned = 0, wish = 0;
     var ownedCountries = {}, allCountries = {};
-    var bySeries = {}, byRegion = {};
-    DATA.forEach(function (m) {
+    var bySeries = {}, byRegion = {}, byType = {}, bySeriesType = {};
+    /* 统计范围跟随「特别版」开关：默认不把收不到的限定款算进完成度，
+     * 否则分母永远差一截，看着像永远集不满。 */
+    var scope = DATA.filter(function (m) { return !m.special || state.filters.special; });
+    scope.forEach(function (m) {
       var s = statusOf(m.id);
       var cn = countryDisp(m);
       if (!bySeries[m.series]) bySeries[m.series] = { total: 0, owned: 0 };
       bySeries[m.series].total++;
       if (!byRegion[m.region]) byRegion[m.region] = { total: 0, owned: 0 };
       byRegion[m.region].total++;
+      if (!byType[m.type]) byType[m.type] = { total: 0, owned: 0 };
+      byType[m.type].total++;
+      var stk = m.series + '|' + m.type;
+      if (!bySeriesType[stk]) bySeriesType[stk] = { total: 0, owned: 0 };
+      bySeriesType[stk].total++;
       if (!allCountries[cn]) allCountries[cn] = { total: 0, owned: 0 };
       allCountries[cn].total++;
       if (s === 'owned') {
         owned++;
         bySeries[m.series].owned++;
         byRegion[m.region].owned++;
+        byType[m.type].owned++;
+        bySeriesType[stk].owned++;
         allCountries[cn].owned++;
         ownedCountries[cn] = true;
       } else if (s === 'wish') wish++;
     });
-    var pct = DATA.length ? Math.round(owned * 100 / DATA.length) : 0;
+    var pct = scope.length ? Math.round(owned * 100 / scope.length) : 0;
 
     var html = '<div class="stat-cards">' +
       '<div class="stat-card"><div class="num">' + owned + '</div><div class="lbl">' + esc(t('stats.owned')) + '</div></div>' +
       '<div class="stat-card"><div class="num">' + wish + '</div><div class="lbl">' + esc(t('stats.wish')) + '</div></div>' +
-      '<div class="stat-card"><div class="num">' + pct + '%</div><div class="lbl">' + esc(tf('stats.completion', { n: DATA.length })) + '</div></div>' +
+      '<div class="stat-card"><div class="num">' + pct + '%</div><div class="lbl">' + esc(tf('stats.completion', { n: scope.length })) + '</div></div>' +
       '<div class="stat-card"><div class="num">' + Object.keys(ownedCountries).length + '</div><div class="lbl">' + esc(t('stats.countries')) + '</div></div>' +
-      '</div>';
+      '</div>' +
+      (state.filters.special ? '' : '<p class="stats-note">' + esc(t('stats.specialNote')) + '</p>');
+
+    html += '<h3>' + esc(t('stats.byType')) + '</h3>';
+    [['mug', 'stats.mugs'], ['ornament', 'stats.ornaments']].forEach(function (pair) {
+      var v = byType[pair[0]] || { total: 0, owned: 0 };
+      var p = v.total ? Math.round(v.owned * 100 / v.total) : 0;
+      html += '<div class="series-row"><div class="sname">' + esc(t(pair[1])) + '</div>' +
+        '<div class="pbar"><i style="width:' + p + '%"></i></div>' +
+        '<div class="pnum">' + v.owned + ' / ' + v.total + '</div></div>';
+    });
 
     html += '<h3>' + esc(t('stats.seriesProgress')) + '</h3>';
     SERIES_ALL.forEach(function (k) {
       var v = bySeries[k] || { total: 0, owned: 0 };
+      if (!v.total) return;
       var p = v.total ? Math.round(v.owned * 100 / v.total) : 0;
+      var mv = bySeriesType[k + '|mug'] || { total: 0, owned: 0 };
+      var ov = bySeriesType[k + '|ornament'] || { total: 0, owned: 0 };
       html += '<div class="series-row"><div class="sname">' + esc(SERIES[k].name) + ' · ' + esc(t('series.sub.' + k)) + '</div>' +
         '<div class="pbar"><i style="width:' + p + '%"></i></div>' +
-        '<div class="pnum">' + v.owned + ' / ' + v.total + '</div></div>';
+        '<div class="pnum">' + v.owned + ' / ' + v.total + '</div></div>' +
+        '<div class="series-sub-row">' +
+        '<span>☕ ' + esc(t('stats.mugs')) + ' ' + mv.owned + '/' + mv.total + '</span>' +
+        (ov.total ? '<span>🎄 ' + esc(t('stats.ornaments')) + ' ' + ov.owned + '/' + ov.total + '</span>' : '') +
+        '</div>';
     });
 
     html += '<h3>' + esc(t('stats.regionDist')) + '</h3><div class="region-grid">';
@@ -351,10 +384,7 @@
   }
 
   function detailSubline(m) {
-    if (I18N.lang === 'en') {
-      var sub = citySub(m);
-      return (sub ? esc(sub) + ' · ' : '') + esc(m.country);
-    }
+    if (I18N.lang === 'en') return esc(m.country);
     return esc(m.city) + ' · ' + esc(m.countryZh || m.country) + ' ' + esc(m.country);
   }
 
@@ -700,6 +730,11 @@
         syncChips();
         applyFilters();
         break;
+      case 'chip-special':
+        state.filters.special = !state.filters.special;
+        syncChips();
+        applyFilters();
+        break;
       case 'reset-filters': resetFilters(); break;
       case 'auth-open':
         $('login-error').textContent = '';
@@ -773,6 +808,7 @@
     f.q = ''; $('f-search').value = '';
     f.series = new Set(SERIES_ALL);
     f.types = new Set(TYPE_ALL);
+    f.special = false;
     f.status = 'all'; $('f-status').value = 'all';
     f.region = 'all'; $('f-region').value = 'all';
     f.country = 'all';
