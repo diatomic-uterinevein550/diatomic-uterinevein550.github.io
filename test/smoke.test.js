@@ -31,7 +31,7 @@ function check(name, cond, extra) {
   else { failures++; console.log('  ✗ FAIL: ' + name + (extra ? ' — ' + extra : '')); }
 }
 
-for (const f of ['data.js', 'photos-index.js', 'placeArt.js', 'mugArt.js', 'auth.js', 'i18n.js', 'photos.js', 'collection.js', 'map.js', 'app.js']) {
+for (const f of ['data.js', 'photos-index.js', 'placeArt.js', 'mugArt.js', 'cloud-config.js', 'cloud.js', 'auth.js', 'i18n.js', 'photos.js', 'collection.js', 'map.js', 'app.js']) {
   const code = fs.readFileSync(path.join(ROOT, 'js', f), 'utf8');
   try { window.eval(code); }
   catch (e) { check('load ' + f, false, e.message); }

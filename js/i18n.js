@@ -86,6 +86,13 @@ window.I18N = (function () {
       'err.pwShort': '密码至少 6 位', 'err.userExists': '用户名已存在，请直接登录',
       'err.userNotFound': '用户不存在', 'err.wrongPw': '密码错误', 'err.pwMismatch': '两次输入的密码不一致',
       'err.badJson': '文件不是有效的 JSON', 'err.notOurs': '不是本站导出的收藏记录文件',
+      'toast.syncing': '☁️ 正在同步收藏…', 'toast.synced': '☁️ 已同步 {n} 条收藏',
+      'toast.syncFail': '同步失败，收藏仍保存在本机', 'toast.cloudErr': '⚠️ 云端写入失败，本地已保存',
+      'toast.confirmEmail': '📧 确认邮件已发出，请点开邮件里的链接完成注册',
+      'err.badEmail': '请输入有效的邮箱地址', 'err.cloudDown': '云端暂时连不上，可先用本地模式',
+      'auth.email': '邮箱', 'auth.emailPh': 'you@example.com',
+      'auth.cloudHint': '☁️ 账号存于 Supabase，收藏会在你的设备间自动同步。',
+      'auth.localHint': '⚠️ 账号数据保存在本浏览器（localStorage），不会上传服务器。请定期使用「导出」备份收藏记录。',
       'lang.btn': 'EN'
     },
     en: {
@@ -170,6 +177,15 @@ window.I18N = (function () {
       'err.pwShort': 'Password must be at least 6 characters', 'err.userExists': 'Username already exists — log in instead',
       'err.userNotFound': 'User not found', 'err.wrongPw': 'Wrong password', 'err.pwMismatch': 'Passwords do not match',
       'err.badJson': 'File is not valid JSON', 'err.notOurs': 'Not a collection file exported from this site',
+      'toast.syncing': '☁️ Syncing your collection…', 'toast.synced': '☁️ Synced {n} records',
+      'toast.syncFail': 'Sync failed — your collection is still saved locally',
+      'toast.cloudErr': '⚠️ Cloud write failed; saved locally',
+      'toast.confirmEmail': '📧 Confirmation email sent — click the link to finish signing up',
+      'err.badEmail': 'Please enter a valid email address',
+      'err.cloudDown': 'Cloud is unreachable right now; local mode still works',
+      'auth.email': 'Email', 'auth.emailPh': 'you@example.com',
+      'auth.cloudHint': '☁️ Accounts live in Supabase; your collection syncs across your devices.',
+      'auth.localHint': '⚠️ Accounts live in this browser (localStorage) and are never uploaded. Export regularly to back up your collection.',
       'lang.btn': '中文'
     }
   };

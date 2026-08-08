@@ -469,9 +469,11 @@
       $('btn-logout').hidden = true;
       return;
     }
-    var u = Collection.currentUser();
+    var cloudUser = window.Cloud && Cloud.isConfigured() && Cloud.user();
+    var u = cloudUser ? Cloud.email() : Collection.currentUser();
+    var badge = cloudUser ? '☁️ ' : '👤 ';
     chip.hidden = false;
-    chip.innerHTML = (u ? '👤 <b>' + esc(u) + '</b>' : '👤 ' + esc(t('chip.guest'))) +
+    chip.innerHTML = (u ? badge + '<b>' + esc(u) + '</b>' : '👤 ' + esc(t('chip.guest'))) +
       ' · ✓' + c.owned + ' ♥' + c.wish;
     $('btn-auth').hidden = !!u;
     $('btn-logout').hidden = !u;
@@ -627,6 +629,25 @@
     applyFilters();
     if (!$('modal-mug').hidden && currentMugId) openMug(currentMugId);
     if (!$('modal-share').hidden) openShare();
+    if (!$('modal-auth').hidden) applyAuthMode();
+  }
+
+  /* 云端模式登录的是邮箱，本地模式是用户名——表单文案随之切换 */
+  function applyAuthMode() {
+    var cloud = window.Cloud && Cloud.isConfigured();
+    var hint = $('auth-hint');
+    if (hint) {
+      hint.setAttribute('data-i18n', cloud ? 'auth.cloudHint' : 'auth.localHint');
+      hint.textContent = t(cloud ? 'auth.cloudHint' : 'auth.localHint');
+    }
+    document.querySelectorAll('.auth-form [name=username]').forEach(function (inp) {
+      var label = inp.parentNode.querySelector('span');
+      if (label) label.textContent = t(cloud ? 'auth.email' : 'auth.username');
+      inp.type = cloud ? 'email' : 'text';
+      inp.placeholder = cloud ? t('auth.emailPh') : (inp.form.id === 'form-register' ? t('auth.usernamePh') : '');
+      inp.autocomplete = cloud ? 'email' : 'username';
+      if (cloud) inp.removeAttribute('minlength'); 
+    });
   }
 
   /* ---------- 事件绑定 ---------- */
@@ -669,6 +690,7 @@
       case 'auth-open':
         $('login-error').textContent = '';
         $('register-error').textContent = '';
+        applyAuthMode();
         $('modal-auth').hidden = false;
         break;
       case 'auth-tab': {
@@ -681,6 +703,13 @@
         break;
       }
       case 'logout':
+        if (cloudMode() && Cloud.user()) {
+          Cloud.signOut().then(function () {
+            Collection.load(null); Photos.load(null);
+            updateUserChip(); applyFilters(); toast(t('toast.loggedOut'));
+          });
+          break;
+        }
         Auth.logout();
         Collection.load(null);
         Photos.load(null);
@@ -758,9 +787,53 @@
   $('f-country').addEventListener('change', function () { state.filters.country = this.value; applyFilters(); });
   $('f-sort').addEventListener('change', function () { state.filters.sort = this.value; applyFilters(); });
 
+  /* 配了 Supabase 就走云端账号，否则退回本地账号 */
+  function cloudMode() { return window.Cloud && Cloud.isConfigured(); }
+
+  function cloudErr(e) {
+    var m = (e && e.message) || '';
+    if (/Invalid login/i.test(m)) return t('err.wrongPw');
+    if (/already registered|already exists/i.test(m)) return t('err.userExists');
+    if (/Password should be/i.test(m)) return t('err.pwShort');
+    if (/valid email/i.test(m)) return t('err.badEmail');
+    if (/cloud_unavailable/.test(m)) return t('err.cloudDown');
+    return m || t('err.cloudDown');
+  }
+
+  /* 云端登录后：拉云端 → 与本地合并 → 整体回写两边 */
+  function syncAfterCloudLogin(label) {
+    toast(t('toast.syncing'));
+    return Cloud.pull().then(function (remote) {
+      var localData = Collection.raw();
+      var merged = Cloud.merge(localData, remote || {});
+      Collection.replaceAll(merged);
+      return Cloud.pushAll(merged);
+    }).then(function () {
+      return Cloud.getProfile();
+    }).then(function (nick) {
+      $('modal-auth').hidden = true;
+      updateUserChip();
+      applyFilters();
+      var c = Collection.counts();
+      toast(tf('toast.synced', { n: c.owned + c.wish }));
+    }).catch(function (e) {
+      $('login-error').textContent = cloudErr(e);
+      toast(t('toast.syncFail'), true);
+    });
+  }
+
   $('form-login').addEventListener('submit', function (e) {
     e.preventDefault();
     var fd = new FormData(this);
+    $('login-error').textContent = '';
+    if (cloudMode()) {
+      Cloud.signIn(fd.get('username'), fd.get('password')).then(function (u) {
+        Collection.load('cloud:' + u.id);
+        Photos.load('cloud:' + u.id);
+        return syncAfterCloudLogin(u.email);
+      }, function (err) { $('login-error').textContent = cloudErr(err); });
+      return;
+    }
     Auth.login(fd.get('username'), fd.get('password')).then(function (name) {
       afterLogin(name, false);
     }, function (err) { $('login-error').textContent = err.message; });
@@ -771,6 +844,20 @@
     var fd = new FormData(this);
     if (fd.get('password') !== fd.get('password2')) {
       $('register-error').textContent = t('err.pwMismatch');
+      return;
+    }
+    if (cloudMode()) {
+      Cloud.signUp(fd.get('username'), fd.get('password')).then(function (r) {
+        if (r.needsConfirm) {
+          $('register-error').textContent = '';
+          $('modal-auth').hidden = true;
+          toast(t('toast.confirmEmail'));
+          return;
+        }
+        Collection.load('cloud:' + r.user.id);
+        Photos.load('cloud:' + r.user.id);
+        return syncAfterCloudLogin(r.user.email);
+      }, function (err) { $('register-error').textContent = cloudErr(err); });
       return;
     }
     Auth.register(fd.get('username'), fd.get('password')).then(function (name) {
@@ -822,6 +909,10 @@
     cityMain: cityMain, citySub: citySub, countryDisp: countryDisp, typeLabel: typeLabel
   };
 
+  window.addEventListener('sbmug:cloud-error', function () {
+    toast(t('toast.cloudErr'), true);
+  });
+
   /* ---------- 启动 ---------- */
   I18N.apply();
   Collection.load(Auth.current());
@@ -831,4 +922,20 @@
   updateUserChip();
   checkShareHash();
   applyFilters();
+
+  /* 云端已配置时恢复上次会话；未配置则一个字节都不下载 */
+  if (window.Cloud && Cloud.isConfigured()) {
+    Cloud.init().then(function (ok) {
+      if (!ok || !Cloud.user()) return;
+      Collection.load('cloud:' + Cloud.user().id);
+      Photos.load('cloud:' + Cloud.user().id);
+      updateUserChip();
+      return Cloud.pull().then(function (remote) {
+        var merged = Cloud.merge(Collection.raw(), remote || {});
+        Collection.replaceAll(merged);
+        updateUserChip();
+        applyFilters();
+      });
+    }).catch(function () { /* 云端不可用时静默退回本地 */ });
+  }
 })();

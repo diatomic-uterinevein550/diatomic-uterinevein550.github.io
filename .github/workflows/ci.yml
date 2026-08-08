@@ -19,7 +19,7 @@ jobs:
         working-directory: test
         run: npm ci || npm install
 
-      - name: 跑测试（图鉴 / 地图 / 插画 / 账号 / 分享）
+      - name: 跑测试（图鉴 / 地图 / 插画 / 账号 / 分享 / 云端同步）
         working-directory: test
         run: npm test
 
@@ -34,6 +34,16 @@ jobs:
             git --no-pager diff -- js/photos-index.js
             exit 1
           fi
+
+      - name: 确认没把 service_role key 提交进来
+        run: |
+          if grep -rqE '"?service_role"?|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}' js/cloud-config.js; then
+            if grep -q 'service_role' js/cloud-config.js; then
+              echo "::error::js/cloud-config.js 里出现了 service_role key —— 那是管理员密钥，会绕过所有行级安全策略，绝不能提交。请立刻在 Supabase 控制台轮换它。"
+              exit 1
+            fi
+          fi
+          echo "✅ 未发现 service_role key"
 
       - name: 数据完整性
         run: |

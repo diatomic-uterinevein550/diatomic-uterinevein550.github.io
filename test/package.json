@@ -4,9 +4,10 @@
   "version": "1.0.0",
   "description": "Headless tests for the Starbucks city mug collection site",
   "scripts": {
-    "test": "node smoke.test.js && node map.test.js",
+    "test": "node smoke.test.js && node map.test.js && node cloud.test.js",
     "test:smoke": "node smoke.test.js",
-    "test:map": "node map.test.js"
+    "test:map": "node map.test.js",
+    "test:cloud": "node cloud.test.js"
   },
   "devDependencies": {
     "jsdom": "^24.0.0"

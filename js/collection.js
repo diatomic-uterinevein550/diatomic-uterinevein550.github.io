@@ -28,13 +28,18 @@ window.Collection = (function () {
     if (!data[id]) data[id] = {};
     data[id].s = s;
     if (!data[id].d) data[id].d = new Date().toISOString().slice(0, 10);
+    data[id].u = new Date().toISOString();   /* 供云端合并判断新旧 */
     persist();
+    syncOne(id);
   }
 
   function remove(id) {
     if (data[id] && data[id].n) { delete data[id].s; }
     else delete data[id];
+    if (data[id]) data[id].u = new Date().toISOString();
     persist();
+    /* 云端要写墓碑，否则别的设备同步回来会把删除撤销 */
+    syncOne(id, !data[id]);
   }
 
   function setNote(id, n) {
@@ -42,7 +47,36 @@ window.Collection = (function () {
     if (!data[id] && !n) return;
     if (!data[id]) data[id] = {};
     if (n) data[id].n = n; else delete data[id].n;
-    if (!data[id].s && !data[id].n) delete data[id];
+    if (data[id]) data[id].u = new Date().toISOString();
+    if (data[id] && !data[id].s && !data[id].n) delete data[id];
+    persist();
+    syncOne(id, !data[id]);
+  }
+
+  /* 单条推云端。失败不打断本地操作——本地永远是权威副本，
+   * 下次登录或手动同步时会整体补齐。 */
+  var pending = {};
+  var flushTimer = null;
+
+  function syncOne(id, tombstone) {
+    if (!window.Cloud || !Cloud.isReady() || !Cloud.user()) return;
+    pending[id] = tombstone ? { s: null } : (data[id] || { s: null });
+    if (flushTimer) return;
+    flushTimer = setTimeout(function () {
+      var batch = pending;
+      pending = {};
+      flushTimer = null;
+      Object.keys(batch).forEach(function (mid) {
+        Cloud.push(mid, batch[mid]).catch(function () {
+          window.dispatchEvent(new CustomEvent('sbmug:cloud-error'));
+        });
+      });
+    }, 600);
+  }
+
+  /* 与云端合并后整体替换本地（登录时调用） */
+  function replaceAll(next) {
+    data = next || {};
     persist();
   }
 
@@ -125,6 +159,7 @@ window.Collection = (function () {
     setNote: setNote, counts: counts, raw: raw,
     exportJSON: exportJSON, importJSON: importJSON,
     mergeableGuestCount: mergeableGuestCount, adoptGuest: adoptGuest,
+    replaceAll: replaceAll,
     currentUser: function () { return user; }
   };
 })();
