@@ -37,6 +37,11 @@ for (const f of ['data.js', 'photos-index.js', 'placeArt.js', 'mugArt.js', 'clou
   catch (e) { check('load ' + f, false, e.message); }
 }
 
+/* cloud-config.js 里现在有真实配置，会让 app 走云端认证。
+ * 本地账号这批用例要显式切回本地模式；云端模式另有专门断言。 */
+const REAL_CLOUD = { ...window.CLOUD_CONFIG };
+window.CLOUD_CONFIG = { url: '', anonKey: '' };
+
 const $ = (id) => window.document.getElementById(id);
 const q = (sel) => window.document.querySelector(sel);
 const click = (el) => el.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
@@ -482,6 +487,22 @@ const cnt = (fn) => window.MUG_DATA.filter(fn).length;
   }
   check('每个地点图形互不相同（' + byPlace.size + ' 个地点）',
     shapes.size === byPlace.size, shapes.size + ' / ' + byPlace.size);
+
+  console.log('— 云端模式切换 —');
+  check('仓库里已配置 Supabase', !!(REAL_CLOUD.url && REAL_CLOUD.anonKey));
+  check('配置的是可公开的 key，不是管理员密钥',
+    /^sb_publishable_/.test(REAL_CLOUD.anonKey) || !/^sb_secret_/.test(REAL_CLOUD.anonKey));
+  window.CLOUD_CONFIG = REAL_CLOUD;
+  click(q('[data-action="auth-open"]'));
+  const unameLabel = q('#form-login [name=username]').parentNode.querySelector('span').textContent;
+  check('云端模式下登录标签变成「邮箱」', unameLabel.includes('邮箱'), unameLabel);
+  check('云端模式下输入框类型为 email', q('#form-login [name=username]').type === 'email');
+  check('云端模式提示文案正确', $('auth-hint').textContent.includes('Supabase'));
+  window.CLOUD_CONFIG = { url: '', anonKey: '' };
+  click(q('[data-action="auth-open"]'));
+  check('切回本地模式标签恢复「用户名」',
+    q('#form-login [name=username]').parentNode.querySelector('span').textContent.includes('用户名'));
+  click(q('#modal-auth [data-action="close-modal"]'));
 
   console.log(failures === 0 ? '\n✅ 全部通过' : '\n❌ ' + failures + ' 项失败');
   process.exit(failures === 0 ? 0 : 1);

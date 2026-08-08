@@ -29,6 +29,11 @@ for (const f of ['auth.js', 'cloud-config.js', 'cloud.js', 'collection.js']) {
 const Cloud = window.Cloud;
 const Collection = window.Collection;
 
+/* 仓库里 cloud-config.js 已填了真实项目。休眠行为要在"未配置"前提下测，
+ * 所以先清空；后面再塞回去测已配置的分支。 */
+const REAL_CLOUD = { ...window.CLOUD_CONFIG };
+window.CLOUD_CONFIG = { url: '', anonKey: '' };
+
 (async () => {
   console.log('— 未配置时完全休眠 —');
   check('isConfigured 为 false', Cloud.isConfigured() === false);
@@ -83,6 +88,11 @@ const Collection = window.Collection;
 
   window.CLOUD_CONFIG = { url: 'https://fake.supabase.co', anonKey: 'anon-key' };
   check('填入配置后 isConfigured 为 true', Cloud.isConfigured() === true);
+  check('仓库里的真实配置格式正确',
+    /^https:\/\/[a-z0-9]+\.supabase\.co$/.test(REAL_CLOUD.url) &&
+    /^sb_publishable_/.test(REAL_CLOUD.anonKey),
+    REAL_CLOUD.url);
+  check('仓库里没有误填管理员密钥', !/^sb_secret_/.test(REAL_CLOUD.anonKey));
 
   /* 直接注入内部状态，绕开真实的动态 import */
   const fakeClient = {

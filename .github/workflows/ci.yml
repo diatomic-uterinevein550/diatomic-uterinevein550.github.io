@@ -35,24 +35,28 @@ jobs:
             exit 1
           fi
 
-      - name: 确认没把 service_role key 提交进来
+      - name: 确认没把管理员密钥提交进来
         run: |
           node -e "
           const fs=require('fs'); global.window={};
           eval(fs.readFileSync('js/cloud-config.js','utf8'));
-          const key=(window.CLOUD_CONFIG||{}).anonKey||'';
+          const key=((window.CLOUD_CONFIG||{}).anonKey||'').trim();
+          const die=(m)=>{ console.error('::error::'+m); process.exit(1); };
           if(!key){ console.log('✅ 未配置云端 key，跳过'); process.exit(0); }
+          // 新版命名（2025+）：sb_publishable_ 可公开，sb_secret_ 是管理员密钥
+          if(key.startsWith('sb_secret_')) die('cloud-config.js 里是 sb_secret_ 开头的管理员密钥，它会绕过所有行级安全策略。请换成 Publishable key，并立刻在 Supabase 控制台轮换泄露的那个。');
+          if(key.startsWith('sb_publishable_')){ console.log('✅ Publishable key，可安全公开'); process.exit(0); }
+          // 旧版命名：JWT，role 必须是 anon
           const parts=key.split('.');
-          if(parts.length!==3){ console.error('::error::anonKey 不是合法的 JWT'); process.exit(1); }
-          let role='';
-          try{ role=JSON.parse(Buffer.from(parts[1],'base64url').toString()).role||''; }
-          catch(e){ console.error('::error::无法解析 anonKey'); process.exit(1); }
-          if(role!=='anon'){
-            console.error('::error::js/cloud-config.js 里的 key role=\"'+role+'\"，不是 anon。'
-              +' service_role 是管理员密钥，会绕过所有行级安全策略。请立刻在 Supabase 控制台轮换它。');
-            process.exit(1);
+          if(parts.length===3){
+            let role='';
+            try{ role=JSON.parse(Buffer.from(parts[1],'base64url').toString()).role||''; }
+            catch(e){ die('无法解析 key'); }
+            if(role!=='anon') die('key 的 role=\"'+role+'\"，不是 anon。service_role 会绕过所有行级安全策略，请立刻轮换。');
+            console.log('✅ 旧版 anon key，可安全公开');
+            process.exit(0);
           }
-          console.log('✅ key 的 role 为 anon，可安全公开');
+          die('无法识别的 key 格式：既不是 sb_publishable_ 也不是合法 JWT');
           "
 
       - name: 数据完整性
