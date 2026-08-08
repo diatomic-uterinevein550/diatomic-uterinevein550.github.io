@@ -632,22 +632,36 @@
     if (!$('modal-auth').hidden) applyAuthMode();
   }
 
-  /* 云端模式登录的是邮箱，本地模式是用户名——表单文案随之切换 */
+  /* 云端模式用邮箱登录，本地模式用用户名——两个独立字段，按模式显示其一。
+   * 被隐藏的那个必须 disabled：否则它身上的 required 会让浏览器
+   * 拒绝提交表单，而且用户看不到是哪里没填。 */
   function applyAuthMode() {
-    var cloud = window.Cloud && Cloud.isConfigured();
+    var cloud = !!(window.Cloud && Cloud.isConfigured());
     var hint = $('auth-hint');
     if (hint) {
       hint.setAttribute('data-i18n', cloud ? 'auth.cloudHint' : 'auth.localHint');
       hint.textContent = t(cloud ? 'auth.cloudHint' : 'auth.localHint');
     }
-    document.querySelectorAll('.auth-form [name=username]').forEach(function (inp) {
-      var label = inp.parentNode.querySelector('span');
-      if (label) label.textContent = t(cloud ? 'auth.email' : 'auth.username');
-      inp.type = cloud ? 'email' : 'text';
-      inp.placeholder = cloud ? t('auth.emailPh') : (inp.form.id === 'form-register' ? t('auth.usernamePh') : '');
-      inp.autocomplete = cloud ? 'email' : 'username';
-      if (cloud) inp.removeAttribute('minlength'); 
+    document.querySelectorAll('.auth-form').forEach(function (form) {
+      var emailBox = form.querySelector('.f-email');
+      var userBox = form.querySelector('.f-username');
+      if (!emailBox || !userBox) return;
+      emailBox.hidden = !cloud;
+      userBox.hidden = cloud;
+      var e = emailBox.querySelector('input');
+      var u = userBox.querySelector('input');
+      e.disabled = !cloud;
+      u.disabled = cloud;
+      if (cloud) { e.required = true; u.required = false; }
+      else { e.required = false; u.required = true; }
     });
+  }
+
+  /* 当前模式下该用哪个字段作为账号标识 */
+  function authIdentifier(form) {
+    var cloud = !!(window.Cloud && Cloud.isConfigured());
+    var inp = form.querySelector(cloud ? '[name=email]' : '[name=username]');
+    return inp ? inp.value.trim() : '';
   }
 
   /* ---------- 事件绑定 ---------- */
@@ -827,7 +841,7 @@
     var fd = new FormData(this);
     $('login-error').textContent = '';
     if (cloudMode()) {
-      Cloud.signIn(fd.get('username'), fd.get('password')).then(function (u) {
+      Cloud.signIn(authIdentifier(this), fd.get('password')).then(function (u) {
         Collection.load('cloud:' + u.id);
         Photos.load('cloud:' + u.id);
         return syncAfterCloudLogin(u.email);
@@ -847,7 +861,7 @@
       return;
     }
     if (cloudMode()) {
-      Cloud.signUp(fd.get('username'), fd.get('password')).then(function (r) {
+      Cloud.signUp(authIdentifier(this), fd.get('password')).then(function (r) {
         if (r.needsConfirm) {
           $('register-error').textContent = '';
           $('modal-auth').hidden = true;
@@ -915,6 +929,7 @@
 
   /* ---------- 启动 ---------- */
   I18N.apply();
+  applyAuthMode();
   Collection.load(Auth.current());
   Photos.load(Auth.current());
   MapView.init();

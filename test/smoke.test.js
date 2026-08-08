@@ -494,14 +494,33 @@ const cnt = (fn) => window.MUG_DATA.filter(fn).length;
     /^sb_publishable_/.test(REAL_CLOUD.anonKey) || !/^sb_secret_/.test(REAL_CLOUD.anonKey));
   window.CLOUD_CONFIG = REAL_CLOUD;
   click(q('[data-action="auth-open"]'));
-  const unameLabel = q('#form-login [name=username]').parentNode.querySelector('span').textContent;
-  check('云端模式下登录标签变成「邮箱」', unameLabel.includes('邮箱'), unameLabel);
-  check('云端模式下输入框类型为 email', q('#form-login [name=username]').type === 'email');
+  check('云端模式：显示邮箱字段、隐藏用户名字段',
+    q('#form-login .f-email').hidden === false && q('#form-login .f-username').hidden === true);
+  check('云端模式：邮箱字段可用且必填', (() => {
+    const e = q('#form-login [name=email]');
+    return e.disabled === false && e.required === true && e.type === 'email';
+  })());
+  check('云端模式：用户名字段被禁用（否则 required 会卡住提交）', (() => {
+    const u = q('#form-login [name=username]');
+    return u.disabled === true && u.required === false;
+  })());
+  check('云端模式：注册页同样切换', (() => {
+    click(q('[data-tab="register"]'));
+    return q('#form-register .f-email').hidden === false &&
+           q('#form-register [name=email]').disabled === false &&
+           q('#form-register [name=username]').disabled === true;
+  })());
+  check('云端模式：被禁用的字段不会进 FormData', (() => {
+    q('#form-register [name=email]').value = 'a@b.com';
+    const fd = new window.FormData(q('#form-register'));
+    return fd.get('email') === 'a@b.com' && fd.get('username') === null;
+  })());
   check('云端模式提示文案正确', $('auth-hint').textContent.includes('Supabase'));
   window.CLOUD_CONFIG = { url: '', anonKey: '' };
   click(q('[data-action="auth-open"]'));
-  check('切回本地模式标签恢复「用户名」',
-    q('#form-login [name=username]').parentNode.querySelector('span').textContent.includes('用户名'));
+  check('切回本地模式：显示用户名、隐藏邮箱',
+    q('#form-login .f-username').hidden === false && q('#form-login .f-email').hidden === true);
+  check('切回本地模式：邮箱字段被禁用', q('#form-login [name=email]').disabled === true);
   click(q('#modal-auth [data-action="close-modal"]'));
 
   console.log(failures === 0 ? '\n✅ 全部通过' : '\n❌ ' + failures + ' 项失败');
