@@ -37,13 +37,23 @@ jobs:
 
       - name: 确认没把 service_role key 提交进来
         run: |
-          if grep -rqE '"?service_role"?|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}' js/cloud-config.js; then
-            if grep -q 'service_role' js/cloud-config.js; then
-              echo "::error::js/cloud-config.js 里出现了 service_role key —— 那是管理员密钥，会绕过所有行级安全策略，绝不能提交。请立刻在 Supabase 控制台轮换它。"
-              exit 1
-            fi
-          fi
-          echo "✅ 未发现 service_role key"
+          node -e "
+          const fs=require('fs'); global.window={};
+          eval(fs.readFileSync('js/cloud-config.js','utf8'));
+          const key=(window.CLOUD_CONFIG||{}).anonKey||'';
+          if(!key){ console.log('✅ 未配置云端 key，跳过'); process.exit(0); }
+          const parts=key.split('.');
+          if(parts.length!==3){ console.error('::error::anonKey 不是合法的 JWT'); process.exit(1); }
+          let role='';
+          try{ role=JSON.parse(Buffer.from(parts[1],'base64url').toString()).role||''; }
+          catch(e){ console.error('::error::无法解析 anonKey'); process.exit(1); }
+          if(role!=='anon'){
+            console.error('::error::js/cloud-config.js 里的 key role=\"'+role+'\"，不是 anon。'
+              +' service_role 是管理员密钥，会绕过所有行级安全策略。请立刻在 Supabase 控制台轮换它。');
+            process.exit(1);
+          }
+          console.log('✅ key 的 role 为 anon，可安全公开');
+          "
 
       - name: 数据完整性
         run: |
