@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 安装测试依赖
+        working-directory: test
+        run: npm ci || npm install
+
+      - name: 跑测试（图鉴 / 地图 / 插画 / 账号 / 分享）
+        working-directory: test
+        run: npm test
+
+      - name: 校验社区照片（命名、体积、是否对应真实杯款）
+        run: python3 tools/build_photos.py --check
+
+      - name: 检查照片索引是否需要重新生成
+        run: |
+          python3 tools/build_photos.py
+          if ! git diff --quiet -- js/photos-index.js; then
+            echo "::error::js/photos-index.js 与 img/ 不同步。请在本地运行 python3 tools/build_photos.py 后一并提交。"
+            git --no-pager diff -- js/photos-index.js
+            exit 1
+          fi
+
+      - name: 数据完整性
+        run: |
+          node -e "
+          const fs=require('fs'); global.window={}; global.document={createElement:()=>({})};
+          eval(fs.readFileSync('js/data.js','utf8'));
+          eval(fs.readFileSync('js/placeArt.js','utf8'));
+          eval(fs.readFileSync('js/mugArt.js','utf8'));
+          const M=window.MUG_DATA;
+          const fail=(m)=>{ console.error('::error::'+m); process.exitCode=1; };
+          const ids=new Set(M.map(m=>m.id));
+          if(ids.size!==M.length) fail('data.js 存在重复 id');
+          for(const m of M){
+            const s=window.MugArt.svg(m,100);
+            if(/\{c\}|\{bg\}/.test(s)) { fail(m.id+' 渲染后残留占位符'); break; }
+          }
+          const places=new Set(M.map(m=>m.city+'|'+m.country));
+          const shapes=new Set();
+          const seen=new Set();
+          for(const m of M){ const k=m.city+'|'+m.country; if(seen.has(k)) continue; seen.add(k);
+            shapes.add(window.MugArt.svg(m,200).replace(/<text[\s\S]*?<\/text>/g,'').replace(/mclip\d+|yarc\d+|oarc\d+/g,'')); }
+          if(shapes.size!==places.size) fail('存在图形完全相同的地点：'+shapes.size+'/'+places.size);
+          console.log('✅ '+M.length+' 款 / '+places.size+' 个地点，图形各不相同');
+          "

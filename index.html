@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>星巴克城市杯 · 收集地图与图鉴</title>
+<meta name="description" content="星巴克城市杯（Global Icon / You Are Here / Been There）收集地图与图鉴 — 粉丝自制项目 | Starbucks city mug collection map & catalog — fan project">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect x='15' y='20' width='52' height='60' rx='10' fill='%2300754a'/%3E%3Cpath d='M67 32 h8 a14 14 0 0 1 0 34 h-8' fill='none' stroke='%2300754a' stroke-width='9'/%3E%3Crect x='22' y='38' width='38' height='24' rx='4' fill='%23f7f4ee'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <svg viewBox="0 0 100 100" width="34" height="34" aria-hidden="true">
+      <rect x="15" y="20" width="52" height="60" rx="10" fill="#f7f4ee"/>
+      <path d="M67 32 h8 a14 14 0 0 1 0 34 h-8" fill="none" stroke="#f7f4ee" stroke-width="9"/>
+      <rect x="22" y="38" width="38" height="24" rx="4" fill="#00754a"/>
+    </svg>
+    <div class="brand-text">
+      <h1 data-i18n="brand.h1">城市杯图鉴</h1>
+      <span>Starbucks City Mugs Collection</span>
+    </div>
+  </div>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-action="tab" data-view="map" data-i18n="tab.map">🗺️ 地图</button>
+    <button class="tab" data-action="tab" data-view="gallery" data-i18n="tab.gallery">📚 图鉴</button>
+    <button class="tab" data-action="tab" data-view="stats" data-i18n="tab.stats">📊 统计</button>
+  </nav>
+
+  <div class="user-area">
+    <span id="user-chip" class="user-chip" hidden></span>
+    <button class="btn ghost" data-action="io-open" data-i18n="btn.io">⇅ 导入/导出</button>
+    <button class="btn ghost" data-action="share-open" data-i18n="btn.share">↗ 分享</button>
+    <button class="btn solid" id="btn-auth" data-action="auth-open" data-i18n="btn.auth">登录 / 注册</button>
+    <button class="btn ghost" id="btn-logout" data-action="logout" data-i18n="btn.logout" hidden>退出</button>
+    <button class="btn ghost" id="btn-lang" data-action="toggle-lang" title="切换语言 / Switch language">EN</button>
+  </div>
+</header>
+
+<div id="share-banner" class="share-banner" hidden>
+  <span data-i18n="share.pre">👀 正在查看</span> <b id="share-owner"></b> <span data-i18n="share.post">分享的收藏（只读）</span>
+  <button class="btn tiny" data-action="exit-share-view" data-i18n="btn.exitShare">退出查看</button>
+</div>
+
+<button class="filter-toggle" id="filter-toggle" data-action="toggle-filters" aria-expanded="false" aria-controls="filterbar"></button>
+
+<section class="filterbar" id="filterbar">
+  <input id="f-search" class="search" type="search" placeholder="🔍 搜索城市 / 国家 / 地标…" data-i18n-ph="search.ph" autocomplete="off">
+
+  <div class="chip-group" id="f-series">
+    <button class="chip c-gi active" data-action="chip-series" data-value="global-icon">Global Icon</button>
+    <button class="chip c-yah active" data-action="chip-series" data-value="you-are-here">You Are Here</button>
+    <button class="chip c-bt active" data-action="chip-series" data-value="been-there">Been There</button>
+    <button class="chip c-dc active" data-action="chip-series" data-value="discovery">Discovery</button>
+  </div>
+
+  <div class="chip-group" id="f-type">
+    <button class="chip active" data-action="chip-type" data-value="mug" data-i18n="chip.mug">☕ 马克杯</button>
+    <button class="chip active" data-action="chip-type" data-value="ornament" data-i18n="chip.ornament">🎄 挂饰</button>
+  </div>
+
+  <select id="f-status" class="select">
+    <option value="all" data-i18n="status.all">全部状态</option>
+    <option value="owned" data-i18n="status.owned">✅ 已拥有</option>
+    <option value="wish" data-i18n="status.wish">💛 愿望单</option>
+    <option value="none" data-i18n="status.none">⬜ 未收集</option>
+  </select>
+
+  <select id="f-region" class="select">
+    <option value="all" data-i18n="region.all">全部地区</option>
+    <option value="asia" data-i18n="region.asia">亚洲</option>
+    <option value="europe" data-i18n="region.europe">欧洲</option>
+    <option value="north-america" data-i18n="region.north-america">北美洲</option>
+    <option value="latin-america" data-i18n="region.latin-america">拉丁美洲</option>
+    <option value="middle-east-africa" data-i18n="region.middle-east-africa">中东与非洲</option>
+    <option value="oceania" data-i18n="region.oceania">大洋洲</option>
+  </select>
+
+  <select id="f-country" class="select">
+    <option value="all" data-i18n="country.all">全部国家</option>
+  </select>
+
+  <select id="f-sort" class="select">
+    <option value="country" data-i18n="sort.country">按国家排序</option>
+    <option value="city" data-i18n="sort.city">按城市排序</option>
+    <option value="year" data-i18n="sort.year">按年份排序</option>
+    <option value="series" data-i18n="sort.series">按系列排序</option>
+  </select>
+
+  <button class="btn tiny ghost" data-action="reset-filters" data-i18n="btn.reset">重置</button>
+  <span class="result-count" id="result-count"></span>
+</section>
+
+<main>
+  <div id="view-map" class="view">
+    <div id="map"></div>
+    <div class="map-empty" id="map-empty" hidden><span data-i18n="empty">😢 没有符合条件的杯子，试试放宽筛选条件</span></div>
+    <div class="map-legend">
+      <div><span class="dot d-owned"></span> <span data-i18n="legend.owned">已拥有</span></div>
+      <div><span class="dot d-partial"></span> <span data-i18n="legend.partial">部分拥有</span></div>
+      <div><span class="dot d-wish"></span> <span data-i18n="legend.wish">愿望单</span></div>
+      <div><span class="dot d-none"></span> <span data-i18n="legend.none">未收集</span></div>
+    </div>
+  </div>
+
+  <div id="view-gallery" class="view scrollable" hidden>
+    <div class="grid" id="gallery-grid"></div>
+    <button class="btn solid load-more" id="gallery-more" data-action="load-more" hidden></button>
+    <div class="empty" id="gallery-empty" data-i18n="empty" hidden>😢 没有符合条件的杯子，试试放宽筛选条件</div>
+  </div>
+
+  <div id="view-stats" class="view scrollable" hidden>
+    <div class="stats-wrap" id="stats-wrap"></div>
+  </div>
+</main>
+
+<!-- 杯子详情 -->
+<div class="modal-backdrop" id="modal-mug" hidden>
+  <div class="modal modal-wide">
+    <button class="modal-close" data-action="close-modal" aria-label="close">×</button>
+    <div id="mug-detail"></div>
+  </div>
+</div>
+
+<!-- 登录 / 注册 -->
+<div class="modal-backdrop" id="modal-auth" hidden>
+  <div class="modal">
+    <button class="modal-close" data-action="close-modal" aria-label="close">×</button>
+    <div class="auth-tabs">
+      <button class="auth-tab active" data-action="auth-tab" data-tab="login" data-i18n="auth.login">登录</button>
+      <button class="auth-tab" data-action="auth-tab" data-tab="register" data-i18n="auth.register">注册</button>
+    </div>
+    <form id="form-login" class="auth-form">
+      <label><span data-i18n="auth.username">用户名</span><input name="username" required autocomplete="username"></label>
+      <label><span data-i18n="auth.password">密码</span><input name="password" type="password" required autocomplete="current-password"></label>
+      <div class="form-error" id="login-error"></div>
+      <button class="btn solid wide" type="submit" data-i18n="auth.login">登录</button>
+    </form>
+    <form id="form-register" class="auth-form" hidden>
+      <label><span data-i18n="auth.username">用户名</span><input name="username" required minlength="2" maxlength="20" autocomplete="username" data-i18n-ph="auth.usernamePh" placeholder="2-20 位，中英文/数字/下划线"></label>
+      <label><span data-i18n="auth.password">密码</span><input name="password" type="password" required minlength="6" autocomplete="new-password" data-i18n-ph="auth.passwordPh" placeholder="至少 6 位"></label>
+      <label><span data-i18n="auth.password2">确认密码</span><input name="password2" type="password" required minlength="6" autocomplete="new-password"></label>
+      <div class="form-error" id="register-error"></div>
+      <button class="btn solid wide" type="submit" data-i18n="auth.registerBtn">注册并登录</button>
+      <p class="form-hint" data-i18n="auth.hint">⚠️ 账号数据保存在本浏览器（localStorage），不会上传服务器。请定期使用「导出」备份收藏记录。</p>
+    </form>
+  </div>
+</div>
+
+<!-- 导入 / 导出 -->
+<div class="modal-backdrop" id="modal-io" hidden>
+  <div class="modal">
+    <button class="modal-close" data-action="close-modal" aria-label="close">×</button>
+    <h2 data-i18n="io.title">导入 / 导出收藏</h2>
+    <div class="io-section">
+      <h3 data-i18n="io.exportTitle">📤 导出</h3>
+      <p data-i18n="io.exportDesc">将当前账号的收藏记录导出为 JSON 文件，可用于备份或迁移到其他设备。</p>
+      <button class="btn solid" data-action="export" data-i18n="io.exportBtn">下载收藏记录 (.json)</button>
+    </div>
+    <div class="io-section">
+      <h3 data-i18n="io.importTitle">📥 导入</h3>
+      <p data-i18n="io.importDesc">选择之前导出的 JSON 文件，可选择与当前记录合并或完全覆盖。</p>
+      <input type="file" id="import-file" accept=".json,application/json" hidden>
+      <button class="btn ghost" data-action="import-trigger" data-i18n="io.importBtn">选择文件…</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="photo-file" accept="image/*" hidden>
+
+<!-- 分享 -->
+<div class="modal-backdrop" id="modal-share" hidden>
+  <div class="modal">
+    <button class="modal-close" data-action="close-modal" aria-label="close">×</button>
+    <h2 data-i18n="shareM.title">分享我的收藏</h2>
+    <p id="share-summary" class="share-summary"></p>
+    <label class="share-link-row"><span data-i18n="shareM.linkLabel">收藏链接</span>
+      <input id="share-url" readonly>
+    </label>
+    <div class="share-buttons">
+      <button class="btn solid" data-action="share-copy" data-i18n="shareM.copy">📋 复制链接</button>
+      <button class="btn ghost" data-action="share-native" id="btn-share-native" data-i18n="shareM.native">📲 系统分享</button>
+    </div>
+    <div class="share-platforms">
+      <a class="pbtn" data-platform="weibo" href="#" target="_blank" rel="noopener">微博 Weibo</a>
+      <a class="pbtn" data-platform="x" href="#" target="_blank" rel="noopener">X / Twitter</a>
+      <a class="pbtn" data-platform="facebook" href="#" target="_blank" rel="noopener">Facebook</a>
+      <a class="pbtn" data-platform="telegram" href="#" target="_blank" rel="noopener">Telegram</a>
+      <a class="pbtn" data-platform="whatsapp" href="#" target="_blank" rel="noopener">WhatsApp</a>
+    </div>
+    <p class="form-hint warn" id="share-toolong" data-i18n="shareM.tooLong" hidden>⚠️ 链接较长，个别平台可能会截断。若对方打开后显示异常，请改用「导入/导出」的 JSON 文件传给对方。</p>
+    <p class="form-hint" data-i18n="shareM.hint">💡 链接中已编码你的收藏数据，对方打开即可看到你的收藏地图。部署到 GitHub Pages 后链接才能被他人访问。</p>
+  </div>
+</div>
+
+<!-- 通用确认框 -->
+<div class="modal-backdrop" id="modal-confirm" hidden>
+  <div class="modal modal-narrow">
+    <h2 id="confirm-title"></h2>
+    <p id="confirm-body"></p>
+    <div class="confirm-buttons" id="confirm-buttons"></div>
+  </div>
+</div>
+
+<footer class="footer" data-i18n="footer">
+  本站为粉丝自制项目，与 Starbucks Corporation 无关。杯款插画为原创示意图，非官方图片。数据由社区整理，可能存在遗漏或错误，欢迎补充。
+</footer>
+
+<div id="toast-root"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" defer></script>
+<script src="js/data.js" defer></script>
+<script src="js/photos-index.js" defer></script>
+<script src="js/placeArt.js" defer></script>
+<script src="js/mugArt.js" defer></script>
+<script src="js/auth.js" defer></script>
+<script src="js/i18n.js" defer></script>
+<script src="js/photos.js" defer></script>
+<script src="js/collection.js" defer></script>
+<script src="js/map.js" defer></script>
+<script src="js/app.js" defer></script>
+</body>
+</html>
